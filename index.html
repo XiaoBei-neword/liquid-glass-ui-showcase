@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#a9c9d4">
+  <meta name="description" content="iOS 26 液态玻璃 UI 交互展示：实时调节透明度、折射率、模糊度、高光与边缘光。">
+  <title>iOS 26 液态玻璃 UI 展示</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --text: #132b38;
+      --muted: #536b77;
+      --subtle: #6d7f88;
+      --glass-rgb: 244 250 255;
+      --glass-alpha: .426;
+      --glass-blur: 16px;
+      --highlight-strength: .64;
+      --edge-strength: .72;
+      --refraction-strength: .36;
+      --accent: #526fe8;
+      --accent-rgb: 82 111 232;
+      --accent-contrast: #ffffff;
+      --shadow: 23 51 68;
+      --line: 255 255 255;
+      --pointer-x: 70%;
+      --pointer-y: 15%;
+      --wallpaper: radial-gradient(circle at 72% 18%, #ffe0b9 0, transparent 33%), radial-gradient(circle at 12% 16%, #a8e5df 0, transparent 38%), linear-gradient(135deg, #8eb8c9 0%, #b8b5d5 45%, #e2b9aa 74%, #84b5af 100%);
+      --ridge-back: linear-gradient(160deg, rgb(80 104 130 / .14), rgb(47 78 93 / .35));
+      --ridge-front: linear-gradient(160deg, rgb(38 82 85 / .22), rgb(24 61 68 / .46));
+      --ease-spring: cubic-bezier(.2, .8, .2, 1);
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --text: #f2f6ff;
+      --muted: #b7c4d2;
+      --subtle: #99aabc;
+      --glass-rgb: 20 30 48;
+      --accent: #91a7ff;
+      --accent-rgb: 145 167 255;
+      --accent-contrast: #101a38;
+      --shadow: 0 5 20;
+      --wallpaper: radial-gradient(circle at 72% 18%, #765b6e 0, transparent 35%), radial-gradient(circle at 12% 16%, #255e68 0, transparent 40%), linear-gradient(135deg, #101d31 0%, #292844 48%, #44303f 76%, #153c43 100%);
+      --ridge-back: linear-gradient(160deg, rgb(66 81 117 / .2), rgb(5 18 35 / .58));
+      --ridge-front: linear-gradient(160deg, rgb(14 49 60 / .35), rgb(4 19 29 / .72));
+    }
+
+    body[data-scene="sunset"] {
+      --wallpaper: radial-gradient(circle at 70% 26%, #ffe4a3 0, transparent 26%), radial-gradient(circle at 20% 8%, #e9b6d5 0, transparent 35%), linear-gradient(145deg, #b58bb6 0%, #e9a18f 48%, #efbd8d 70%, #7b9ba9 100%);
+      --ridge-back: linear-gradient(160deg, rgb(115 72 108 / .18), rgb(83 57 86 / .38));
+      --ridge-front: linear-gradient(160deg, rgb(69 62 91 / .24), rgb(43 57 72 / .5));
+    }
+
+    body[data-scene="ocean"] {
+      --wallpaper: radial-gradient(circle at 76% 14%, #d6f7e9 0, transparent 28%), radial-gradient(circle at 16% 16%, #a5e5ef 0, transparent 34%), linear-gradient(145deg, #70b9cf 0%, #75c8c5 43%, #81b3ce 70%, #477f9f 100%);
+      --ridge-back: linear-gradient(160deg, rgb(46 105 121 / .14), rgb(31 83 107 / .3));
+      --ridge-front: linear-gradient(160deg, rgb(24 88 95 / .2), rgb(20 66 85 / .45));
+    }
+
+    html[data-theme="dark"] body[data-scene="sunset"] {
+      --wallpaper: radial-gradient(circle at 70% 26%, #9b695c 0, transparent 28%), radial-gradient(circle at 20% 8%, #5f365f 0, transparent 36%), linear-gradient(145deg, #241a37 0%, #633844 48%, #70473f 72%, #1c3547 100%);
+    }
+
+    html[data-theme="dark"] body[data-scene="ocean"] {
+      --wallpaper: radial-gradient(circle at 76% 14%, #316c70 0, transparent 30%), radial-gradient(circle at 16% 16%, #214d62 0, transparent 36%), linear-gradient(145deg, #10283c 0%, #16434a 43%, #1a3955 70%, #0d2339 100%);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background: #9dbbc6;
+      transition: color .45s ease;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    button, a, input { -webkit-tap-highlight-color: transparent; }
+    button { cursor: pointer; }
+    a { color: inherit; text-decoration: none; }
+    svg { display: block; }
+    ::selection { color: #fff; background: rgb(var(--accent-rgb) / .75); }
+    :focus-visible { outline: 3px solid rgb(var(--accent-rgb) / .75); outline-offset: 4px; }
+    [hidden] { display: none !important; }
+
+    .skip-link {
+      position: fixed;
+      z-index: 1000;
+      top: 12px;
+      left: 12px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      color: #fff;
+      background: #142b38;
+      transform: translateY(-150%);
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+
+    .wallpaper {
+      position: fixed;
+      z-index: -3;
+      inset: 0;
+      overflow: hidden;
+      background: var(--wallpaper);
+      transition: background 1s ease;
+    }
+    .wallpaper::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(680px circle at var(--pointer-x) var(--pointer-y), rgb(255 255 255 / .17), transparent 68%);
+      pointer-events: none;
+    }
+    .aurora { position: absolute; border-radius: 50%; filter: blur(64px); opacity: .58; mix-blend-mode: soft-light; will-change: transform; }
+    .aurora-a { width: 48vw; height: 48vw; min-width: 420px; min-height: 420px; top: -20%; left: -8%; background: #a2fff1; animation: drift-a 18s ease-in-out infinite alternate; }
+    .aurora-b { width: 44vw; height: 44vw; min-width: 400px; min-height: 400px; top: 6%; right: -12%; background: #ffd2aa; animation: drift-b 22s ease-in-out infinite alternate; }
+    .aurora-c { width: 40vw; height: 40vw; min-width: 360px; min-height: 360px; bottom: -16%; left: 30%; background: #a795ff; animation: drift-c 20s ease-in-out infinite alternate; }
+    .horizon { position: absolute; inset: 30% 0 0; opacity: .9; }
+    .ridge { position: absolute; inset: 0; transform-origin: bottom; }
+    .ridge-back { background: var(--ridge-back); clip-path: polygon(0 55%, 10% 35%, 17% 46%, 31% 15%, 42% 42%, 55% 22%, 66% 46%, 78% 20%, 88% 40%, 100% 25%, 100% 100%, 0 100%); }
+    .ridge-front { background: var(--ridge-front); clip-path: polygon(0 68%, 15% 50%, 28% 68%, 41% 43%, 57% 65%, 73% 46%, 87% 63%, 100% 48%, 100% 100%, 0 100%); }
+    .water-lines { position: absolute; inset: 76% 0 0; opacity: .14; background: repeating-linear-gradient(178deg, transparent 0 15px, rgb(255 255 255 / .5) 16px, transparent 17px 28px); transform: skewY(-2deg); }
+    .grain { position: absolute; inset: 0; opacity: .15; mix-blend-mode: soft-light; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E"); }
+
+    @keyframes drift-a { to { transform: translate(18vw, 12vh) scale(1.16); } }
+    @keyframes drift-b { to { transform: translate(-15vw, 16vh) scale(.88); } }
+    @keyframes drift-c { to { transform: translate(-12vw, -12vh) scale(1.14); } }
+    @keyframes float { 50% { transform: translateY(-10px) rotate(2deg); } }
+    @keyframes pulse { 50% { opacity: .45; transform: scale(.86); } }
+    @keyframes sheet-in { from { opacity: 0; transform: translateY(24px) scale(.97); } }
+
+    .reduce-motion .aurora,
+    .reduce-motion .lens,
+    .reduce-motion .live-dot { animation-play-state: paused !important; }
+
+    .page-shell { width: min(1420px, 100%); margin: 0 auto; padding: 26px 40px 56px; }
+    .site-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 64px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 15px; }
+    .brand-mark .icon { width: 23px; height: 23px; }
+    .brand-name { font-size: 15px; font-weight: 720; letter-spacing: .02em; }
+    .brand-meta { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .17em; text-transform: uppercase; }
+    .header-actions { display: flex; gap: 10px; }
+    .icon-button { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 50%; }
+    .icon-button:hover { transform: translateY(-2px); }
+
+    .glass {
+      position: relative;
+      isolation: isolate;
+      border: 1px solid rgb(var(--line) / calc(var(--edge-strength) * .52));
+      background: linear-gradient(135deg, rgb(255 255 255 / calc(var(--highlight-strength) * .18)), transparent 40%), rgb(var(--glass-rgb) / var(--glass-alpha));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.45);
+      backdrop-filter: blur(var(--glass-blur)) saturate(1.45);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / calc(var(--edge-strength) * .65)), inset 0 -1px 0 rgb(255 255 255 / calc(var(--edge-strength) * .13)), 0 18px 48px rgb(var(--shadow) / .12);
+      transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease, transform .35s var(--ease-spring);
+    }
+    .glass::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: var(--highlight-strength);
+      background: radial-gradient(120% 90% at 10% -10%, rgb(255 255 255 / .44), transparent 45%), radial-gradient(80% 60% at 100% 100%, rgb(var(--accent-rgb) / .12), transparent 65%);
+      filter: url(#liquid-filter);
+    }
+    .glass::after {
+      content: "";
+      position: absolute;
+      z-index: 3;
+      inset: 0;
+      border-radius: inherit;
+      padding: calc(.5px + var(--refraction-strength) * 1.2px);
+      pointer-events: none;
+      opacity: var(--edge-strength);
+      background: linear-gradient(125deg, rgb(255 255 255 / .8), transparent 24%, transparent 70%, rgb(255 255 255 / .28));
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+    }
+    button.glass { border: 1px solid rgb(var(--line) / calc(var(--edge-strength) * .52)); }
+
+    .hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr); align-items: center; gap: 48px; margin-bottom: 48px; }
+    .eyebrow { display: flex; align-items: center; gap: 10px; margin: 0 0 20px; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .2em; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 26px; height: 1px; background: currentColor; }
+    h1 { max-width: 900px; margin: 0; font-size: clamp(46px, 6vw, 82px); font-weight: 680; line-height: .99; letter-spacing: -.065em; }
+    h1 span { display: block; margin-top: 13px; font-size: .62em; letter-spacing: -.055em; }
+    .gradient-text { color: var(--accent); background: linear-gradient(120deg, var(--text) 12%, var(--accent) 56%, var(--text)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero-subtitle { margin: 25px 0 0; font-size: 20px; font-weight: 580; letter-spacing: -.02em; }
+    .hero-description { max-width: 580px; margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.8; }
+    .hero-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+    .hero-tag { padding: 7px 12px; border: 1px solid rgb(255 255 255 / .28); border-radius: 999px; color: var(--muted); background: rgb(255 255 255 / .09); font-size: 11px; font-weight: 600; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
+    .hero-visual { position: relative; display: grid; place-items: center; min-height: 280px; }
+    .lens { display: grid; place-items: center; width: 218px; height: 218px; border-radius: 50%; animation: float 7s ease-in-out infinite; }
+    .lens::before { z-index: 0; background: radial-gradient(circle at 28% 18%, rgb(255 255 255 / .85), transparent 28%), radial-gradient(circle at 68% 76%, rgb(var(--accent-rgb) / .32), transparent 54%); }
+    .lens-inner { position: relative; z-index: 1; display: grid; place-items: center; width: 148px; height: 148px; border: 1px solid rgb(255 255 255 / .4); border-radius: 50%; color: rgb(255 255 255 / .9); background: linear-gradient(145deg, rgb(255 255 255 / .16), rgb(var(--accent-rgb) / .08)); box-shadow: inset 8px 10px 24px rgb(255 255 255 / .15), inset -10px -12px 30px rgb(var(--accent-rgb) / .16); }
+    .lens-inner .icon { width: 52px; height: 52px; stroke-width: 1; }
+    .lens-caption { position: absolute; right: 0; bottom: 8px; min-width: 150px; padding: 14px 16px; border-radius: 18px; }
+    .lens-caption-label { color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .15em; }
+    .lens-caption-value { margin-top: 4px; font-size: 23px; font-weight: 650; letter-spacing: -.04em; }
+    .lens-caption-value small { color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: 0; }
+
+    .control-panel { z-index: 5; margin-bottom: 72px; padding: 26px 28px 22px; border-radius: 30px; scroll-margin-top: 24px; }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 25px; }
+    .panel-title-wrap { display: flex; align-items: center; gap: 12px; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #46b997; box-shadow: 0 0 0 5px rgb(70 185 151 / .13); animation: pulse 2.4s ease-in-out infinite; }
+    .panel-title { margin: 0; font-size: 17px; font-weight: 680; letter-spacing: -.02em; }
+    .panel-subtitle { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
+    .segmented { display: flex; gap: 4px; padding: 4px; border-radius: 15px; }
+    .segment { min-width: 78px; padding: 8px 14px; border: 0; border-radius: 11px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 620; transition: color .2s, background .2s, box-shadow .2s; }
+    .segment[aria-pressed="true"] { color: var(--text); background: rgb(255 255 255 / .35); box-shadow: 0 4px 14px rgb(var(--shadow) / .1), inset 0 1px 0 rgb(255 255 255 / .55); }
+    html[data-theme="dark"] .segment[aria-pressed="true"] { background: rgb(255 255 255 / .12); }
+
+    .controls-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 26px; }
+    .control-label { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 13px; font-size: 12px; font-weight: 620; }
+    .control-label output { color: var(--accent); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 700; }
+    .material-range { --range-progress: 50%; width: 100%; height: 20px; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+    .material-range::-webkit-slider-runnable-track { height: 5px; border-radius: 99px; background: linear-gradient(to right, var(--accent) 0 var(--range-progress), rgb(var(--glass-rgb) / .34) var(--range-progress) 100%); box-shadow: inset 0 1px 2px rgb(var(--shadow) / .12); }
+    .material-range::-moz-range-track { height: 5px; border-radius: 99px; background: rgb(var(--glass-rgb) / .34); }
+    .material-range::-moz-range-progress { height: 5px; border-radius: 99px; background: var(--accent); }
+    .material-range::-webkit-slider-thumb { width: 19px; height: 19px; margin-top: -7px; appearance: none; -webkit-appearance: none; border: 1px solid rgb(255 255 255 / .8); border-radius: 50%; background: rgb(255 255 255 / .8); box-shadow: 0 3px 12px rgb(var(--shadow) / .25), inset 0 1px 2px #fff; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); transition: transform .2s; }
+    .material-range::-moz-range-thumb { width: 19px; height: 19px; border: 1px solid rgb(255 255 255 / .8); border-radius: 50%; background: rgb(255 255 255 / .8); box-shadow: 0 3px 12px rgb(var(--shadow) / .25); }
+    .material-range:hover::-webkit-slider-thumb { transform: scale(1.12); }
+    .control-hint { display: block; margin-top: 6px; color: var(--subtle); font-size: 10px; }
+    .panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 22px; padding-top: 18px; border-top: 1px solid rgb(255 255 255 / .18); }
+    .tint-control, .panel-actions { display: flex; align-items: center; gap: 10px; }
+    .footer-label { margin-right: 4px; color: var(--muted); font-size: 11px; font-weight: 600; }
+    .swatch { position: relative; width: 23px; height: 23px; padding: 0; border: 2px solid rgb(255 255 255 / .6); border-radius: 50%; background: var(--swatch); box-shadow: 0 2px 8px rgb(var(--shadow) / .14); transition: transform .2s; }
+    .swatch[aria-pressed="true"] { transform: scale(1.16); box-shadow: 0 0 0 3px rgb(var(--glass-rgb) / .72), 0 0 0 5px var(--swatch); }
+    .text-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 8px 12px; border: 0; border-radius: 12px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 620; }
+    .text-button:hover { color: var(--text); background: rgb(var(--glass-rgb) / .25); }
+    .text-button .icon { width: 15px; height: 15px; }
+    .text-button[aria-pressed="true"] { color: var(--accent); background: rgb(var(--accent-rgb) / .1); }
+    .theme-icon-sun { display: none; }
+    html[data-theme="dark"] .theme-icon-sun { display: block; }
+    html[data-theme="dark"] .theme-icon-moon { display: none; }
+
+    .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 24px; scroll-margin-top: 24px; }
+    .section-kicker { margin: 0 0 6px; color: var(--accent); font-size: 10px; font-weight: 750; letter-spacing: .18em; }
+    .section-heading h2 { margin: 0; font-size: clamp(28px, 3.2vw, 42px); font-weight: 650; letter-spacing: -.045em; }
+    .section-heading > p { max-width: 360px; margin: 0 0 4px; color: var(--muted); font-size: 12px; line-height: 1.7; text-align: right; }
+
+    .gallery { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; }
+    .component-card { min-width: 0; padding: 22px; border-radius: 26px; scroll-margin-top: 24px; }
+    .component-card:hover { border-color: rgb(var(--line) / calc(var(--edge-strength) * .7)); }
+    .span-12 { grid-column: span 12; }
+    .span-7 { grid-column: span 7; }
+    .span-5 { grid-column: span 5; }
+    .component-header { position: relative; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+    .component-name { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 12px; font-weight: 680; }
+    .component-index { color: var(--accent); font-size: 9px; font-weight: 750; letter-spacing: .12em; }
+    .component-note { color: var(--subtle); font-size: 10px; }
+
+    .demo-nav { display: flex; align-items: center; gap: 22px; min-height: 70px; padding: 10px 12px 10px 20px; border-radius: 23px; }
+    .demo-brand { display: flex; align-items: center; gap: 8px; margin-right: auto; font-size: 15px; font-weight: 720; }
+    .demo-brand .icon { color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 4px; }
+    .nav-link { padding: 10px 15px; border: 0; border-radius: 13px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 580; transition: .25s; }
+    .nav-link:hover { color: var(--text); background: rgb(var(--glass-rgb) / .24); }
+    .nav-link[aria-pressed="true"] { color: var(--text); background: rgb(var(--glass-rgb) / .48); box-shadow: inset 0 1px 0 rgb(255 255 255 / .45), 0 4px 14px rgb(var(--shadow) / .08); }
+    .nav-status { display: flex; align-items: center; gap: 7px; padding: 9px 13px; border-radius: 13px; color: var(--muted); background: rgb(var(--accent-rgb) / .09); font-size: 10px; white-space: nowrap; }
+    .nav-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #47ba98; }
+
+    .search-wrap { position: relative; z-index: 4; }
+    .search-bar { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 15px; border-radius: 18px; }
+    .search-bar > .icon { color: var(--muted); }
+    .search-bar input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text); background: transparent; font-size: 13px; }
+    .search-bar input::placeholder { color: var(--subtle); }
+    .clear-search { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: rgb(var(--glass-rgb) / .35); }
+    .clear-search .icon { width: 13px; height: 13px; }
+    .search-suggestions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+    .suggestion { padding: 7px 10px; border: 1px solid rgb(255 255 255 / .2); border-radius: 10px; color: var(--muted); background: rgb(var(--glass-rgb) / .12); font-size: 10px; }
+    .suggestion:hover { color: var(--accent); background: rgb(var(--accent-rgb) / .1); }
+    .search-result { min-height: 16px; margin: 12px 2px 0; color: var(--subtle); font-size: 10px; }
+
+    .button-showcase { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-height: 54px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 18px; border: 0; border-radius: 16px; font-size: 12px; font-weight: 650; transition: transform .25s var(--ease-spring), box-shadow .25s, background .25s; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn:active { transform: translateY(1px) scale(.97); }
+    .btn-primary { color: var(--accent-contrast); background: linear-gradient(135deg, rgb(var(--accent-rgb) / .94), rgb(var(--accent-rgb) / .72)); box-shadow: inset 0 1px 0 rgb(255 255 255 / .35), 0 10px 24px rgb(var(--accent-rgb) / .22); }
+    .btn-secondary { color: var(--text); }
+    .btn .icon { width: 17px; height: 17px; }
+    .favorite-button { width: 46px; padding: 0; }
+    .favorite-button[aria-pressed="true"] { color: #e65f84; background: rgb(255 220 230 / .35); }
+    .favorite-button[aria-pressed="true"] .icon { fill: currentColor; }
+    .interaction-hint { margin: 16px 0 0; color: var(--subtle); font-size: 10px; }
+
+    .music-card { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; padding: 18px; border-radius: 24px; }
+    .album-art { position: relative; display: flex; align-items: end; min-height: 148px; overflow: hidden; border-radius: 19px; background: radial-gradient(circle at 65% 30%, #ffc4a3, transparent 30%), linear-gradient(150deg, #6a5db1, #bb78a4 52%, #406c89); box-shadow: inset 0 1px 0 rgb(255 255 255 / .4), 0 12px 24px rgb(var(--shadow) / .18); transition: background .5s; }
+    .album-art::before { content: ""; position: absolute; width: 130px; height: 130px; top: -45px; right: -30px; border: 18px solid rgb(255 255 255 / .18); border-radius: 50%; }
+    .album-art::after { content: ""; position: absolute; inset: 0; background: repeating-radial-gradient(ellipse at 20% 100%, transparent 0 10px, rgb(255 255 255 / .08) 11px 12px); }
+    .album-art.track-1 { background: radial-gradient(circle at 65% 30%, #c0ffe3, transparent 30%), linear-gradient(150deg, #226e78, #58a793 52%, #3b658a); }
+    .album-art.track-2 { background: radial-gradient(circle at 65% 30%, #fff0af, transparent 30%), linear-gradient(150deg, #a75464, #e59572 52%, #625183); }
+    .art-label { position: relative; z-index: 1; padding: 13px; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
+    .music-info { min-width: 0; padding: 5px 3px 0 0; }
+    .music-overline { color: var(--subtle); font-size: 9px; font-weight: 700; letter-spacing: .13em; }
+    .music-title { overflow: hidden; margin: 7px 0 3px; font-size: 20px; font-weight: 650; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap; }
+    .music-artist { margin: 0; color: var(--muted); font-size: 11px; }
+    .music-progress { width: 100%; height: 4px; margin: 21px 0 5px; accent-color: var(--accent); cursor: pointer; }
+    .time-row { display: flex; justify-content: space-between; color: var(--subtle); font-size: 9px; font-variant-numeric: tabular-nums; }
+    .music-controls { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 9px; }
+    .music-button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: var(--text); background: transparent; }
+    .music-button:hover { background: rgb(var(--glass-rgb) / .28); }
+    .music-button.play { width: 40px; height: 40px; color: var(--accent-contrast); background: var(--accent); box-shadow: 0 6px 16px rgb(var(--accent-rgb) / .25); }
+    .music-button .icon { width: 16px; height: 16px; }
+
+    .scene-list { display: grid; gap: 9px; }
+    .scene-option { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 12px; border-radius: 17px; text-align: left; }
+    .scene-option:hover { transform: translateX(3px); }
+    .scene-option[aria-pressed="true"] { border-color: rgb(var(--accent-rgb) / .45); background: linear-gradient(90deg, rgb(var(--accent-rgb) / .13), transparent), rgb(var(--glass-rgb) / var(--glass-alpha)); }
+    .scene-thumb { width: 38px; height: 38px; flex: 0 0 auto; border: 1px solid rgb(255 255 255 / .4); border-radius: 12px; background: linear-gradient(140deg, #8fd8cf, #aaa0d2 55%, #e8ae9e); box-shadow: inset 0 1px 0 rgb(255 255 255 / .4); }
+    .scene-thumb.sunset { background: linear-gradient(140deg, #bc8bb7, #eda084 55%, #f4cd8f); }
+    .scene-thumb.ocean { background: linear-gradient(140deg, #83d8dd, #69b8ca 55%, #477ca2); }
+    .scene-copy { min-width: 0; flex: 1; }
+    .scene-title { display: block; font-size: 12px; font-weight: 650; }
+    .scene-subtitle { display: block; margin-top: 3px; color: var(--subtle); font-size: 9px; }
+    .scene-check { display: grid; place-items: center; width: 20px; height: 20px; color: transparent; }
+    .scene-check .icon { width: 15px; height: 15px; }
+    .scene-option[aria-pressed="true"] .scene-check { color: var(--accent); }
+
+    .tab-preview { margin: 0 0 15px; color: var(--muted); font-size: 11px; text-align: center; }
+    .tab-preview strong { color: var(--text); font-weight: 650; }
+    .tab-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 6px; border-radius: 22px; }
+    .tab-item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 10px 4px 8px; border: 0; border-radius: 16px; color: var(--subtle); background: transparent; font-size: 9px; transition: .25s; }
+    .tab-item .icon { width: 18px; height: 18px; }
+    .tab-item[aria-pressed="true"] { color: var(--accent); background: rgb(var(--glass-rgb) / .48); box-shadow: 0 5px 15px rgb(var(--shadow) / .1), inset 0 1px 0 rgb(255 255 255 / .5); transform: translateY(-2px); }
+
+    .toolbar { display: flex; align-items: center; justify-content: space-around; gap: 8px; min-height: 74px; padding: 9px 12px; border-radius: 23px; }
+    .tool-button { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 8px 6px; border: 0; border-radius: 14px; color: var(--muted); background: transparent; font-size: 9px; transition: .25s; }
+    .tool-button .icon { width: 19px; height: 19px; }
+    .tool-button:hover { color: var(--accent); background: rgb(var(--accent-rgb) / .09); transform: translateY(-2px); }
+    .tool-button[aria-pressed="true"] { color: var(--accent); background: rgb(var(--accent-rgb) / .1); }
+    .tool-separator { width: 1px; height: 28px; background: rgb(255 255 255 / .23); }
+
+    .dialog-component { overflow: hidden; }
+    .dialog-showcase { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 36px; }
+    .dialog-copy { padding: 10px 8px; }
+    .dialog-copy h3 { max-width: 430px; margin: 0 0 12px; font-size: clamp(23px, 3vw, 36px); font-weight: 630; line-height: 1.15; letter-spacing: -.045em; }
+    .dialog-copy p { max-width: 450px; margin: 0 0 22px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+    .mini-dialog-wrap { position: relative; display: grid; place-items: center; min-height: 230px; }
+    .mini-dialog-wrap::before { content: ""; position: absolute; width: 270px; height: 170px; border-radius: 50%; background: rgb(var(--accent-rgb) / .2); filter: blur(40px); }
+    .mini-dialog { width: min(320px, 92%); padding: 24px; border-radius: 26px; text-align: center; transform: rotate(3deg); }
+    .mini-dialog-icon { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 13px; border-radius: 15px; color: var(--accent); background: rgb(var(--accent-rgb) / .12); }
+    .mini-dialog h4 { margin: 0 0 6px; font-size: 16px; }
+    .mini-dialog p { margin: 0 0 17px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+    .mini-dialog-button { height: 34px; border-radius: 11px; color: var(--accent-contrast); background: var(--accent); font-size: 10px; font-weight: 650; line-height: 34px; }
+
+    .empty-state { margin-top: 20px; padding: 42px 24px; border-radius: 26px; text-align: center; }
+    .empty-state .icon { width: 30px; height: 30px; margin: 0 auto 14px; color: var(--muted); }
+    .empty-state h3 { margin: 0 0 7px; font-size: 17px; }
+    .empty-state p { margin: 0 0 18px; color: var(--muted); font-size: 12px; }
+
+    dialog.glass-dialog { position: fixed; inset: 0; width: min(430px, calc(100% - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 28px; overflow-y: auto; border-radius: 30px; color: var(--text); scrollbar-width: thin; }
+    dialog.glass-dialog[open] { animation: sheet-in .35s var(--ease-spring); }
+    dialog.glass-dialog::backdrop { background: rgb(8 20 32 / .26); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+    .dialog-close { position: absolute; z-index: 5; top: 14px; right: 14px; width: 34px; height: 34px; }
+    .dialog-close .icon { width: 16px; height: 16px; }
+    .dialog-hero-icon { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 19px; border-radius: 19px; color: var(--accent); background: rgb(var(--accent-rgb) / .13); }
+    .dialog-hero-icon .icon { width: 26px; height: 26px; }
+    .glass-dialog h2 { margin: 0 0 8px; font-size: 25px; letter-spacing: -.035em; }
+    .glass-dialog > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.75; }
+    .material-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 22px 0; }
+    .summary-item { padding: 13px 8px; border: 1px solid rgb(255 255 255 / .18); border-radius: 15px; background: rgb(var(--glass-rgb) / .18); text-align: center; }
+    .summary-item dt { color: var(--subtle); font-size: 9px; }
+    .summary-item dd { margin: 5px 0 0; color: var(--accent); font-size: 16px; font-weight: 680; font-variant-numeric: tabular-nums; }
+    .dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .toast { position: fixed; z-index: 100; bottom: 24px; left: 50%; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 12px 18px; border-radius: 16px; font-size: 11px; font-weight: 600; opacity: 0; pointer-events: none; transform: translate(-50%, 18px); transition: opacity .25s, transform .25s; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .toast .icon { width: 15px; height: 15px; color: #47ba98; }
+    .page-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 48px; padding: 22px 4px 0; border-top: 1px solid rgb(255 255 255 / .2); color: var(--muted); font-size: 10px; letter-spacing: .04em; }
+    .footer-status { display: flex; align-items: center; gap: 7px; }
+    .footer-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #47ba98; }
+
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .glass { background-color: rgb(var(--glass-rgb) / .92); }
+    }
+
+    @media (max-width: 1100px) {
+      .page-shell { padding-inline: 28px; }
+      .controls-grid { grid-template-columns: repeat(3, 1fr); row-gap: 22px; }
+      .span-7, .span-5 { grid-column: span 6; }
+      .span-12 { grid-column: span 12; }
+      .hero { grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; }
+      .lens { width: 190px; height: 190px; }
+      .lens-inner { width: 128px; height: 128px; }
+      .music-card { grid-template-columns: 105px minmax(0, 1fr); gap: 14px; }
+      .album-art { min-height: 142px; }
+    }
+
+    @media (max-width: 760px) {
+      .page-shell { padding: 20px 18px 40px; }
+      .site-header { margin-bottom: 44px; }
+      .brand-meta { display: none; }
+      .hero { display: block; margin-bottom: 34px; }
+      .hero-visual { display: none; }
+      h1 { font-size: clamp(43px, 13vw, 66px); }
+      h1 span { margin-top: 10px; font-size: .58em; line-height: 1.08; }
+      .hero-description { font-size: 13px; }
+      .control-panel { margin-bottom: 52px; padding: 22px 18px 18px; border-radius: 25px; }
+      .panel-header { align-items: flex-start; flex-direction: column; gap: 16px; }
+      .segmented { width: 100%; }
+      .segment { flex: 1; }
+      .controls-grid { grid-template-columns: repeat(2, 1fr); gap: 22px 18px; }
+      .panel-footer { align-items: flex-start; flex-direction: column; }
+      .panel-actions { width: 100%; justify-content: space-between; }
+      .section-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
+      .section-heading > p { text-align: left; }
+      .gallery { gap: 16px; }
+      .span-7, .span-5, .span-12 { grid-column: span 12; }
+      .component-card { padding: 18px; border-radius: 24px; }
+      .demo-nav { flex-wrap: wrap; gap: 10px; padding: 12px; }
+      .demo-brand { padding-left: 5px; }
+      .nav-status { margin-left: auto; }
+      .nav-links { order: 3; width: 100%; }
+      .nav-link { flex: 1; }
+      .dialog-showcase { grid-template-columns: 1fr; gap: 12px; }
+      .mini-dialog-wrap { min-height: 220px; }
+      .page-footer { align-items: flex-start; flex-direction: column; gap: 8px; }
+    }
+
+    @media (max-width: 480px) {
+      .brand-name { font-size: 13px; }
+      .brand-mark, .icon-button { width: 40px; height: 40px; }
+      .header-actions { gap: 7px; }
+      .controls-grid { grid-template-columns: 1fr; }
+      .control-hint { display: none; }
+      .tint-control { flex-wrap: wrap; }
+      .component-note { display: none; }
+      .music-card { grid-template-columns: 92px minmax(0, 1fr); padding: 13px; gap: 12px; }
+      .album-art { min-height: 144px; }
+      .music-title { font-size: 16px; }
+      .music-controls { gap: 10px; }
+      .dialog-actions { grid-template-columns: 1fr; }
+      dialog.glass-dialog[open] { inset: auto 0 0; width: calc(100% - 24px); max-height: calc(100dvh - 24px); margin: auto auto 12px; border-radius: 28px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body data-scene="aurora">
+  <a class="skip-link" href="#components">跳至组件画廊</a>
+
+  <svg class="svg-defs" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="liquid-filter" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+        <feTurbulence id="liquid-noise" type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="2" seed="8" result="noise"/>
+        <feGaussianBlur in="noise" stdDeviation="1.2" result="softNoise"/>
+        <feDisplacementMap id="liquid-displacement" in="SourceGraphic" in2="softNoise" scale="11.52" xChannelSelector="R" yChannelSelector="B"/>
+      </filter>
+      <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 2.7s6.5 7.1 6.5 11.6a6.5 6.5 0 0 1-13 0C5.5 9.8 12 2.7 12 2.7Z"/><path d="M9 15.2c.5 1.4 1.5 2.1 3 2.2"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.8 15.1A9 9 0 0 1 8.9 3.2 9 9 0 1 0 20.8 15.1Z"/></symbol>
+      <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 1 2.64 6.36M3 4v7h7"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7Z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke-width="3"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><path d="m6 5 10 7L6 19ZM18 5v14"/></symbol>
+      <symbol id="i-prev" viewBox="0 0 24 24"><path d="m18 5-10 7 10 14ZM6 5v14"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-6h6v6"/></symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5Z"/></symbol>
+      <symbol id="i-library" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5ZM4 5.5v14M8 7h8"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18h1.5a1.5 1.5 0 0 0 0-3H12a2 2 0 0 1 0-4h3a6 6 0 0 0 6-6c0-3-4-5-9-5Z"/><circle cx="7.5" cy="10" r=".8" fill="currentColor"/><circle cx="10" cy="6.8" r=".8" fill="currentColor"/><circle cx="15" cy="7" r=".8" fill="currentColor"/></symbol>
+      <symbol id="i-motion" viewBox="0 0 24 24"><path d="M4 8h10M2 12h14M6 16h8"/><path d="m15 5 5 7-5 7"/></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5M3 3l6 6M21 3l-6 6M3 21l6-6M21 21l-6-6"/></symbol>
+      <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="wallpaper" aria-hidden="true">
+    <div class="aurora aurora-a"></div>
+    <div class="aurora aurora-b"></div>
+    <div class="aurora aurora-c"></div>
+    <div class="horizon"><div class="ridge ridge-back"></div><div class="ridge ridge-front"></div><div class="water-lines"></div></div>
+    <div class="grain"></div>
+  </div>
+
+  <main class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="Lumen 液态玻璃实验室首页">
+        <span class="brand-mark glass"><svg class="icon" aria-hidden="true"><use href="#i-drop"/></svg></span>
+        <span><span class="brand-name">Lumen</span><span class="brand-meta">Liquid Glass Lab</span></span>
+      </a>
+      <div class="header-actions">
+        <button class="icon-button glass" id="reset-top" type="button" aria-label="还原默认材质" title="还原默认材质"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg></button>
+        <button class="icon-button glass theme-toggle" type="button" aria-label="切换至深色模式" title="切换明暗模式">
+          <svg class="icon theme-icon-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+          <svg class="icon theme-icon-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="hero" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">Apple HIG · Material Study 2026</p>
+        <h1 id="page-title"><span class="gradient-text" style="display:inline;margin:0">iOS 26</span><span>液态玻璃 UI 展示</span></h1>
+        <p class="hero-subtitle">液态玻璃材质预览</p>
+        <p class="hero-description">光穿过界面，留下折射、反射与层次。拖动材质参数，观察每一个组件如何回应光线。</p>
+        <div class="hero-tags" aria-label="材质特性"><span class="hero-tag">通透 Transparent</span><span class="hero-tag">折射 Refraction</span><span class="hero-tag">悬浮 Floating</span></div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="lens glass"><div class="lens-inner"><svg class="icon"><use href="#i-drop"/></svg></div></div>
+        <div class="lens-caption glass"><div class="lens-caption-label">REFRACTIVE INDEX</div><div class="lens-caption-value"><span id="hero-ior">1.36</span> <small>IOR / LIVE</small></div></div>
+      </div>
+    </section>
+
+    <section class="control-panel glass" id="material" aria-labelledby="material-title">
+      <div class="panel-header">
+        <div class="panel-title-wrap"><span class="live-dot" aria-hidden="true"></span><div><h2 class="panel-title" id="material-title">全局材质控制</h2><p class="panel-subtitle">参数实时同步至所有玻璃组件</p></div></div>
+        <div class="segmented glass" role="group" aria-label="材质预设">
+          <button class="segment" type="button" data-preset="clear" aria-pressed="false">Clear 清透</button>
+          <button class="segment" type="button" data-preset="frosted" aria-pressed="false">Frosted 磨砂</button>
+        </div>
+      </div>
+      <div class="controls-grid">
+        <div class="control-group"><label class="control-label" for="transparency">透明度 <output id="transparency-value" for="transparency">58%</output></label><input class="material-range" id="transparency" type="range" min="0" max="100" value="58" data-key="transparency"><span class="control-hint">越高越通透</span></div>
+        <div class="control-group"><label class="control-label" for="refraction">折射率 <output id="refraction-value" for="refraction">1.36</output></label><input class="material-range" id="refraction" type="range" min="0" max="100" value="36" data-key="refraction"><span class="control-hint">边缘扭曲与色散</span></div>
+        <div class="control-group"><label class="control-label" for="blur">模糊度 <output id="blur-value" for="blur">16 px</output></label><input class="material-range" id="blur" type="range" min="0" max="40" value="16" data-key="blur"><span class="control-hint">从清透到磨砂</span></div>
+        <div class="control-group"><label class="control-label" for="highlight">高光强度 <output id="highlight-value" for="highlight">64%</output></label><input class="material-range" id="highlight" type="range" min="0" max="100" value="64" data-key="highlight"><span class="control-hint">表面反射亮度</span></div>
+        <div class="control-group"><label class="control-label" for="edge">边缘光强度 <output id="edge-value" for="edge">72%</output></label><input class="material-range" id="edge" type="range" min="0" max="100" value="72" data-key="edge"><span class="control-hint">轮廓光与厚度</span></div>
+      </div>
+      <div class="panel-footer">
+        <div class="tint-control" role="group" aria-label="玻璃色调"><span class="footer-label">色调偏移</span>
+          <button class="swatch" type="button" style="--swatch:#6479ed" data-accent="#526fe8" data-rgb="82 111 232" data-dark-accent="#91a7ff" data-dark-rgb="145 167 255" data-name="鸢尾蓝" aria-label="鸢尾蓝" aria-pressed="true"></button>
+          <button class="swatch" type="button" style="--swatch:#a276dd" data-accent="#8c5dc5" data-rgb="140 93 197" data-dark-accent="#c2a0f0" data-dark-rgb="194 160 240" data-name="星云紫" aria-label="星云紫" aria-pressed="false"></button>
+          <button class="swatch" type="button" style="--swatch:#55b7a5" data-accent="#278f80" data-rgb="39 143 128" data-dark-accent="#7bd6c5" data-dark-rgb="123 214 197" data-name="湖水绿" aria-label="湖水绿" aria-pressed="false"></button>
+          <button class="swatch" type="button" style="--swatch:#df9872" data-accent="#c77850" data-rgb="199 120 80" data-dark-accent="#f0ae89" data-dark-rgb="240 174 137" data-name="日落橙" aria-label="日落橙" aria-pressed="false"></button>
+        </div>
+        <div class="panel-actions">
+          <button class="text-button" id="motion-toggle" type="button" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-motion"/></svg><span>暂停动态光影</span></button>
+          <button class="text-button" id="reset-material" type="button"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg><span>还原默认</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="components" aria-labelledby="gallery-title">
+      <div class="section-heading"><div><p class="section-kicker">08 COMPONENTS · ONE MATERIAL</p><h2 id="gallery-title">组件画廊</h2></div><p>每个组件都可操作。使用玻璃搜索栏筛选组件，或切换场景观察材质的适应性。</p></div>
+      <div class="gallery" id="gallery">
+        <article class="component-card glass span-12" data-component data-search="玻璃导航栏 导航 navigation navbar nav lumen">
+          <div class="component-header"><h3 class="component-name"><span class="component-index">01</span>玻璃导航栏</h3><span class="component-note">NAVIGATION BAR</span></div>
+          <nav class="demo-nav glass" aria-label="演示导航栏"><div class="demo-brand"><svg class="icon" aria-hidden="true"><use href="#i-drop"/></svg>Lumen</div><div class="nav-links"><button class="nav-link" type="button" aria-pressed="true">发现</button><button class="nav-link" type="button" aria-pressed="false">组件</button><button class="nav-link" type="button" aria-pressed="false">材质</button></div><span class="nav-status" id="nav-status">发现 · 实时预览</span></nav>
+        </article>
+
+        <article class="component-card glass span-5" id="search-component" data-component data-search="玻璃搜索栏 搜索 search find filter">
+          <div class="component-header"><h3 class="component-name"><span class="component-index">02</span>玻璃搜索栏</h3><span class="component-note">LIVE FILTER</span></div>
+          <div class="search-wrap"><div class="search-bar glass"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><input id="component-search" type="search" placeholder="搜索组件，例如「卡片」" aria-label="搜索组件" autocomplete="off"><button class="clear-search" id="clear-search" type="button" aria-label="清空搜索" hidden><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="search-suggestions"><button class="suggestion" type="button">导航</button><button class="suggestion" type="button">卡片</button><button class="suggestion" type="button">弹窗</button></div><p class="search-result" id="search-result" aria-live="polite">显示全部 8 个组件</p></div>
+        </article>
+
+        <article class="component-card glass span-7" data-component data-search="玻璃按钮 按钮 button 主要 次要 收藏">
+          <div class="component-header"><h3 class="component-name"><span class="component-index">05</span>玻璃按钮</h3><span class="component-note">SPRING FEEDBACK</span></div>
+          <div class="button-showcase"><button class="btn btn-primary" type="button" data-open-dialog>开启体验<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button><button class="btn btn-secondary glass" id="reset-secondary" type="button"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg>重置材质</button><button class="btn btn-secondary glass favorite-button" id="favorite" type="button" aria-label="收藏此材质" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg></button></div><p class="interaction-hint">试试按压反馈，或打开一个与全局材质同步的玻璃弹窗。</p>
+        </article>
+
+        <article class="component-card glass span-7" data-component data-search="玻璃卡片 卡片 card 音乐 music player">
+          <div class="component-header"><h3 class="component-name"><span class="component-index">03</span>玻璃卡片</h3><span class="component-note">MEDIA CARD · 可播放</span></div>
+          <div class="music-card glass"><div class="album-art" id="album-art"><span class="art-label">LUMEN SESSIONS</span></div><div class="music-info"><span class="music-overline">SPATIAL AUDIO</span><h4 class="music-title" id="music-title">Midnight Motion</h4><p class="music-artist" id="music-artist">Aurora Skies</p><input class="music-progress" id="music-progress" type="range" min="0" max="100" value="32" aria-label="音乐播放进度"><div class="time-row"><span id="music-current">1:12</span><span>3:45</span></div><div class="music-controls"><button class="music-button" id="music-prev" type="button" aria-label="上一首"><svg class="icon" aria-hidden="true"><use href="#i-prev"/></svg></button><button class="music-button play" id="music-play" type="button" aria-label="播放" aria-pressed="false"><svg class="icon" aria-hidden="true"><use id="play-icon" href="#i-play"/></svg></button><button class="music-button" id="music-next" type="button" aria-label="下一首"><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button></div></div></div>
+        </article>
+
+        <article class="component-card glass span-5" data-component data-search="玻璃列表项 列表 list 场景 壁纸 scene">
+          <div class="component-header"><h3 class="component-name"><span class="component-index">04</span>玻璃列表项</h3><span class="component-note">切换动态壁纸</span></div>
+          <div class="scene-list" role="group" aria-label="壁纸场景">
+            <button class="scene-option glass" type="button" data-scene="aurora" aria-pressed="true"><span class="scene-thumb"></span><span class="scene-copy"><span class="scene-title">极光山谷</span><span class="scene-subtitle">冷色 · 柔和 · 通透</span></span><span class="scene-check"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span></button>
+            <button class="scene-option glass" type="button" data-scene="sunset" aria-pressed="false"><span class="scene-thumb sunset"></span><span class="scene-copy"><span class="scene-title">日落海岸</span><span class="scene-subtitle">暖色 · 反射 · 朦胧</span></span><span class="scene-check"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span></button>
+            <button class="scene-option glass" type="button" data-scene="ocean" aria-pressed="false"><span class="scene-thumb ocean"></span><span class="scene-copy"><span class="scene-title">清晨海面</span><span class="scene-subtitle">清爽 · 折射 · 轻盈</span></span><span class="scene-check"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span></button>
+          </div>
+        </article>
+
+        <article class="component-card glass span-5" data-component data-search="玻璃标签栏 标签栏 tab tabbar 首页 探索 资料库 我的">
+          <div class="component-header"><h3 class="component-name"><span class="component-index">06</span>玻璃标签栏</h3><span class="component-note">TAB BAR</span></div>
+          <p class="tab-preview">当前视图：<strong id="tab-current">首页</strong></p><div class="tab-bar glass" role="group" aria-label="演示标签栏"><button class="tab-item" type="button" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>首页</button><button class="tab-item" type="button" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-compass"/></svg>探索</button><button class="tab-item" type="button" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-library"/></svg>资料库</button><button class="tab-item" type="button" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>我的</button></div>
+        </article>
+
+        <article class="component-card glass span-7" data-component data-search="玻璃工具栏 工具栏 toolbar 重置 色调 动态 全屏">
+          <div class="component-header"><h3 class="component-name"><span class="component-index">07</span>玻璃工具栏</h3><span class="component-note">实用工具 · 点击试试</span></div>
+          <div class="toolbar glass" role="toolbar" aria-label="材质工具栏"><button class="tool-button" id="tool-reset" type="button"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg>重置</button><span class="tool-separator" aria-hidden="true"></span><button class="tool-button" id="tool-tint" type="button"><svg class="icon" aria-hidden="true"><use href="#i-palette"/></svg>换色调</button><button class="tool-button" id="tool-motion" type="button" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-motion"/></svg><span>暂停光影</span></button><button class="tool-button" id="tool-expand" type="button" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-expand"/></svg><span>全屏</span></button></div>
+        </article>
+
+        <article class="component-card glass span-12 dialog-component" data-component data-search="玻璃弹窗 弹窗 底部抽屉 dialog modal sheet">
+          <div class="component-header"><h3 class="component-name"><span class="component-index">08</span>玻璃弹窗 / 底部抽屉</h3><span class="component-note">DIALOG · RESPONSIVE SHEET</span></div>
+          <div class="dialog-showcase"><div class="dialog-copy"><h3>让重要操作，浮于内容之上。</h3><p>弹窗继承全局透明度、折射与模糊参数。在桌面端居中显示，在手机端自然转化为底部抽屉。</p><button class="btn btn-primary" type="button" data-open-dialog>打开玻璃弹窗<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div><div class="mini-dialog-wrap" aria-hidden="true"><div class="mini-dialog glass"><div class="mini-dialog-icon"><svg class="icon"><use href="#i-layers"/></svg></div><h4>材质已同步</h4><p>所有参数均会实时应用于此弹窗。</p><div class="mini-dialog-button">完成</div></div></div></div>
+        </article>
+      </div>
+      <div class="empty-state glass" id="empty-state" hidden><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><h3>没有找到匹配组件</h3><p>试试「导航」「卡片」或「弹窗」。</p><button class="btn btn-secondary glass" id="empty-reset" type="button">清空搜索</button></div>
+    </section>
+
+    <footer class="page-footer"><span>LUMEN · Liquid Glass Material Study</span><span class="footer-status">实时渲染 · 响应式布局 · 无外部依赖</span></footer>
+  </main>
+
+  <dialog class="glass glass-dialog" id="glass-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description">
+    <button class="icon-button glass dialog-close" id="dialog-close" type="button" aria-label="关闭弹窗"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
+    <div class="dialog-hero-icon"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg></div><h2 id="dialog-title">玻璃弹窗</h2><p id="dialog-description">光线、背景与材质在这里交汇。以下参数与全局控制台保持同步。</p>
+    <dl class="material-summary"><div class="summary-item"><dt>透明度</dt><dd id="summary-transparency">58%</dd></div><div class="summary-item"><dt>折射率</dt><dd id="summary-refraction">1.36</dd></div><div class="summary-item"><dt>模糊度</dt><dd id="summary-blur">16px</dd></div></dl>
+    <div class="dialog-actions"><button class="btn btn-secondary glass" id="dialog-frosted" type="button">应用磨砂预设</button><button class="btn btn-primary" id="dialog-done" type="button">完成</button></div>
+  </dialog>
+
+  <div class="toast glass" id="toast" role="status" aria-live="polite"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span id="toast-text"></span></div>
+
+  <script>
+    (() => {
+      "use strict";
+      const root = document.documentElement;
+      const body = document.body;
+      const $ = (selector, scope = document) => scope.querySelector(selector);
+      const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
+      const defaults = { transparency: 58, refraction: 36, blur: 16, highlight: 64, edge: 72 };
+      const presets = {
+        clear: { transparency: 76, refraction: 62, blur: 5, highlight: 84, edge: 90 },
+        frosted: { transparency: 26, refraction: 18, blur: 30, highlight: 44, edge: 52 }
+      };
+      const state = { ...defaults };
+      let activeAccent = 0;
+      let toastTimer;
+      let musicTimer;
+      let trackIndex = 0;
+      const accents = $$(".swatch");
+
+      function toast(message) {
+        $("#toast-text").textContent = message;
+        $("#toast").classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => $("#toast").classList.remove("show"), 2200);
+      }
+
+      function formatValue(key, value) {
+        if (key === "refraction") return (1 + value / 100).toFixed(2);
+        if (key === "blur") return `${value} px`;
+        return `${value}%`;
+      }
+
+      function updateRangeProgress(input) {
+        const progress = ((input.value - input.min) / (input.max - input.min)) * 100;
+        input.style.setProperty("--range-progress", `${progress}%`);
+      }
+
+      function updateMaterial() {
+        root.style.setProperty("--glass-alpha", (0.82 - state.transparency * 0.0068).toFixed(3));
+        root.style.setProperty("--glass-blur", `${state.blur}px`);
+        root.style.setProperty("--highlight-strength", (state.highlight / 100).toFixed(2));
+        root.style.setProperty("--edge-strength", (state.edge / 100).toFixed(2));
+        root.style.setProperty("--refraction-strength", (state.refraction / 100).toFixed(2));
+        $("#liquid-displacement").setAttribute("scale", (state.refraction * 0.32).toFixed(2));
+        $("#liquid-noise").setAttribute("baseFrequency", `${(0.007 + state.refraction * 0.00014).toFixed(4)} 0.02`);
+        Object.keys(state).forEach(key => {
+          const input = $(`#${key}`);
+          input.value = state[key];
+          $(`#${key}-value`).textContent = formatValue(key, state[key]);
+          updateRangeProgress(input);
+        });
+        const ior = formatValue("refraction", state.refraction);
+        $("#hero-ior").textContent = ior;
+        $("#summary-transparency").textContent = `${state.transparency}%`;
+        $("#summary-refraction").textContent = ior;
+        $("#summary-blur").textContent = `${state.blur}px`;
+      }
+
+      function markCustomPreset() {
+        $$("[data-preset]").forEach(button => button.setAttribute("aria-pressed", "false"));
+      }
+
+      function applyPreset(name, notify = true) {
+        Object.assign(state, presets[name] || defaults);
+        updateMaterial();
+        $$("[data-preset]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.preset === name)));
+        if (notify) toast(name === "clear" ? "已切换为清透材质" : name === "frosted" ? "已切换为磨砂材质" : "已还原默认材质");
+      }
+
+      function setAccent(index, notify = true) {
+        activeAccent = (index + accents.length) % accents.length;
+        accents.forEach((swatch, i) => swatch.setAttribute("aria-pressed", String(i === activeAccent)));
+        const selected = accents[activeAccent];
+        const dark = root.dataset.theme === "dark";
+        root.style.setProperty("--accent", dark ? selected.dataset.darkAccent : selected.dataset.accent);
+        root.style.setProperty("--accent-rgb", dark ? selected.dataset.darkRgb : selected.dataset.rgb);
+        if (notify) toast(`色调已切换为${selected.dataset.name}`);
+      }
+
+      function resetMaterial() {
+        Object.assign(state, defaults);
+        updateMaterial();
+        markCustomPreset();
+        setAccent(0, false);
+        toast("已还原默认材质");
+      }
+
+      function toggleTheme() {
+        const dark = root.dataset.theme !== "dark";
+        root.dataset.theme = dark ? "dark" : "light";
+        $$(".theme-toggle").forEach(button => button.setAttribute("aria-label", dark ? "切换至浅色模式" : "切换至深色模式"));
+        $("meta[name='theme-color']").setAttribute("content", dark ? "#17253a" : "#a9c9d4");
+        setAccent(activeAccent, false);
+        toast(dark ? "深色模式已开启" : "浅色模式已开启");
+      }
+
+      function toggleMotion() {
+        const paused = body.classList.toggle("reduce-motion");
+        $("#motion-toggle").setAttribute("aria-pressed", String(paused));
+        $("#motion-toggle span").textContent = paused ? "开启动态光影" : "暂停动态光影";
+        $("#tool-motion").setAttribute("aria-pressed", String(paused));
+        $("#tool-motion span").textContent = paused ? "开启动态" : "暂停光影";
+        toast(paused ? "动态光影已暂停" : "动态光影已开启");
+      }
+
+      $$(".material-range").forEach(input => {
+        input.addEventListener("input", () => {
+          state[input.dataset.key] = Number(input.value);
+          updateMaterial();
+          markCustomPreset();
+        });
+      });
+      $$("[data-preset]").forEach(button => button.addEventListener("click", () => applyPreset(button.dataset.preset)));
+      accents.forEach((swatch, index) => swatch.addEventListener("click", () => setAccent(index)));
+      $$(".theme-toggle").forEach(button => button.addEventListener("click", toggleTheme));
+      ["#reset-top", "#reset-material", "#reset-secondary", "#tool-reset"].forEach(selector => $(selector).addEventListener("click", resetMaterial));
+      $("#motion-toggle").addEventListener("click", toggleMotion);
+      $("#tool-motion").addEventListener("click", toggleMotion);
+      $("#tool-tint").addEventListener("click", () => setAccent(activeAccent + 1));
+
+      const searchInput = $("#component-search");
+      const cards = $$("[data-component]");
+      function filterComponents() {
+        const query = searchInput.value.trim().toLocaleLowerCase("zh-CN");
+        let matches = 0;
+        cards.forEach(card => {
+          const match = !query || card.dataset.search.toLocaleLowerCase("zh-CN").includes(query);
+          card.hidden = !match;
+          if (match) matches += 1;
+        });
+        $("#clear-search").hidden = !query;
+        $("#empty-state").hidden = matches !== 0;
+        $("#search-result").textContent = query ? `已匹配 ${matches} / 8 个组件` : "显示全部 8 个组件";
+      }
+      function clearSearch() {
+        searchInput.value = "";
+        filterComponents();
+        searchInput.focus();
+      }
+      searchInput.addEventListener("input", filterComponents);
+      $("#clear-search").addEventListener("click", clearSearch);
+      $("#empty-reset").addEventListener("click", clearSearch);
+      $$(".suggestion").forEach(button => button.addEventListener("click", () => {
+        searchInput.value = button.textContent.trim();
+        filterComponents();
+      }));
+
+      $$(".nav-link").forEach(button => button.addEventListener("click", () => {
+        $$(".nav-link").forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+        $("#nav-status").textContent = `${button.textContent} · 实时预览`;
+      }));
+
+      $$(".scene-option").forEach(button => button.addEventListener("click", () => {
+        body.dataset.scene = button.dataset.scene;
+        $$(".scene-option").forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+        toast(`壁纸已切换为${$(".scene-title", button).textContent}`);
+      }));
+
+      $$(".tab-item").forEach(button => button.addEventListener("click", () => {
+        $$(".tab-item").forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+        $("#tab-current").textContent = button.textContent.trim();
+      }));
+
+      $("#favorite").addEventListener("click", event => {
+        const button = event.currentTarget;
+        const active = button.getAttribute("aria-pressed") !== "true";
+        button.setAttribute("aria-pressed", String(active));
+        button.setAttribute("aria-label", active ? "取消收藏此材质" : "收藏此材质");
+        toast(active ? "已收藏当前材质" : "已取消收藏");
+      });
+
+      const dialog = $("#glass-dialog");
+      $$("[data-open-dialog]").forEach(button => button.addEventListener("click", () => {
+        updateMaterial();
+        if (typeof dialog.showModal === "function") dialog.showModal();
+        else dialog.setAttribute("open", "");
+      }));
+      function closeDialog() { if (typeof dialog.close === "function") dialog.close(); else dialog.removeAttribute("open"); }
+      $("#dialog-close").addEventListener("click", closeDialog);
+      $("#dialog-done").addEventListener("click", closeDialog);
+      $("#dialog-frosted").addEventListener("click", () => applyPreset("frosted"));
+      dialog.addEventListener("click", event => {
+        if (event.target !== dialog) return;
+        const rect = dialog.getBoundingClientRect();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDialog();
+      });
+
+      const tracks = [
+        { title: "Midnight Motion", artist: "Aurora Skies" },
+        { title: "Glass Horizon", artist: "Northern Lights" },
+        { title: "Afterglow", artist: "Coastal Dreams" }
+      ];
+      function changeTrack(direction) {
+        trackIndex = (trackIndex + direction + tracks.length) % tracks.length;
+        $("#music-title").textContent = tracks[trackIndex].title;
+        $("#music-artist").textContent = tracks[trackIndex].artist;
+        $("#album-art").className = `album-art${trackIndex ? ` track-${trackIndex}` : ""}`;
+        $("#music-progress").value = 0;
+        updateMusicTime(0);
+      }
+      function updateMusicTime(value) {
+        const seconds = Math.round(225 * value / 100);
+        $("#music-current").textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+      }
+      function stopMusic() {
+        clearInterval(musicTimer);
+        musicTimer = null;
+        $("#music-play").setAttribute("aria-pressed", "false");
+        $("#music-play").setAttribute("aria-label", "播放");
+        $("#play-icon").setAttribute("href", "#i-play");
+      }
+      $("#music-play").addEventListener("click", () => {
+        if (musicTimer) { stopMusic(); return; }
+        $("#music-play").setAttribute("aria-pressed", "true");
+        $("#music-play").setAttribute("aria-label", "暂停");
+        $("#play-icon").setAttribute("href", "#i-pause");
+        musicTimer = setInterval(() => {
+          const progress = $("#music-progress");
+          progress.value = Number(progress.value) + 0.35;
+          updateMusicTime(Number(progress.value));
+          if (Number(progress.value) >= 100) { stopMusic(); changeTrack(1); }
+        }, 500);
+      });
+      $("#music-next").addEventListener("click", () => changeTrack(1));
+      $("#music-prev").addEventListener("click", () => changeTrack(-1));
+      $("#music-progress").addEventListener("input", event => updateMusicTime(Number(event.target.value)));
+
+      $("#tool-expand").addEventListener("click", async () => {
+        try {
+          if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+          } else {
+            await document.exitFullscreen();
+          }
+        } catch {
+          toast("当前浏览器未允许全屏显示");
+        }
+      });
+      document.addEventListener("fullscreenchange", () => {
+        const active = Boolean(document.fullscreenElement);
+        $("#tool-expand").setAttribute("aria-pressed", String(active));
+        $("#tool-expand span").textContent = active ? "退出全屏" : "全屏";
+      });
+
+      if (window.matchMedia("(pointer: fine)").matches) {
+        window.addEventListener("pointermove", event => {
+          root.style.setProperty("--pointer-x", `${event.clientX}px`);
+          root.style.setProperty("--pointer-y", `${event.clientY}px`);
+        }, { passive: true });
+      }
+
+      updateMaterial();
+    })();
+  </script>
+</body>
+</html>

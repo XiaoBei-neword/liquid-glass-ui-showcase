@@ -1,0 +1,9 @@
+# WorkBuddy internal project data
+.workbuddy/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
